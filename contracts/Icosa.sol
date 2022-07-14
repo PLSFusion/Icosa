@@ -353,7 +353,7 @@ contract Icosa is ERC20 {
             bonus = (payout * (_stakeBonusSquid + 100)) / 100;
         }
 
-        return bonus;
+        return (bonus - payout);
     }
 
     /**
@@ -661,17 +661,26 @@ contract Icosa is ERC20 {
             "ICSA: Selling requires token ownership");
 
         // load HSI stake data and HEX share rate
-        HDRNShareCache memory share      = _hsiLoad(IHEXStakeInstance(_hsim.hsiToken(tokenId)));
+        HDRNShareCache memory share  = _hsiLoad(IHEXStakeInstance(_hsim.hsiToken(tokenId)));
         HEXGlobals memory hexGlobals = _hexGlobalsLoad();
 
         // mint ICSA to the caller
         uint256 borrowableHdrn = share._stake.stakeShares * (share._stake.stakedDays - share._mintedDays);
         uint256 payout         = borrowableHdrn / hexGlobals.shareRate;
-
+        
         require(payout > 0,
             "ICSA: Insufficient HSI value");
 
-        _mint(msg.sender, payout);
+        uint256 qcBonus;
+        uint256 hlBonus = ((payout * (1000 + share._launchBonus)) / 1000) - payout;
+
+        if (share._stake.stakedDays == 5555) {
+            qcBonus = ((payout * 110) / 100) - payout;
+        }
+
+        nftPoolIcsaCollected += qcBonus + hlBonus;
+
+        _mint(msg.sender, (payout + qcBonus + hlBonus));
 
         // transfer and detokenize the HSI
         _hsim.transferFrom(msg.sender, address(this), tokenId);
@@ -683,7 +692,7 @@ contract Icosa is ERC20 {
 
         emit HSIBuyBack(payout, msg.sender, share._stake.stakeId);
 
-        return payout;
+        return (payout + qcBonus + hlBonus);
     }
 
     // HDRN Staking
@@ -853,6 +862,7 @@ contract Icosa is ERC20 {
         uint256 payoutPerPoint = hdrnPoolPayout[currentDay] - hdrnPoolPayout[stake._capitalAdded];
 
         uint256 payout;
+        uint256 bonus;
         uint256 payoutPenalty;
         uint256 principal;
         uint256 principalPenalty;
@@ -878,7 +888,7 @@ contract Icosa is ERC20 {
             uint256 stakerClass = (stake._stakeAmount * _decimalResolution) / _hdrn.totalSupply();
 
             payout = stake._payoutPreCapitalAddIcsa + (stake._stakePoints * payoutPerPoint);
-            payout = _calcStakeBonus(stakerClass, payout);
+            bonus  = _calcStakeBonus(stakerClass, payout);
             principal = stake._stakeAmount;
         }
 
@@ -895,21 +905,23 @@ contract Icosa is ERC20 {
         stake._minStakeLength          = 0;
         _stakeUpdate(hdrnStakes[msg.sender], stake);
 
+        nftPoolIcsaCollected += bonus;
+
         // mint ICSA and return payout
-        if (payout > 0) { _mint(msg.sender, payout); }
+        if (payout > 0) { _mint(msg.sender, (payout + bonus)); }
 
         // return staked principal
         if (principal > 0) { _hdrn.transfer(msg.sender, principal); }
 
         emit HDRNStakeEnd(
             uint256(uint40 (block.timestamp))
-                |  (uint256(uint72(payout))           << 40)
+                |  (uint256(uint72(payout + bonus))   << 40)
                 |  (uint256(uint72(principalPenalty)) << 112)
                 |  (uint256(uint72(payoutPenalty))    << 184),
             msg.sender
         );
 
-        return (payout, principalPenalty, payoutPenalty);
+        return ((payout + bonus), principalPenalty, payoutPenalty);
     }
 
     // ICSA Staking
@@ -1085,6 +1097,7 @@ contract Icosa is ERC20 {
         uint256 payoutPerPointHdrn = icsaPoolPayoutHdrn[currentDay] - icsaPoolPayoutHdrn[stake._capitalAdded];
 
         uint256 payoutIcsa;
+        uint256 bonusIcsa;
         uint256 payoutHdrn;
         uint256 payoutPenaltyIcsa;
         uint256 payoutPenaltyHdrn;
@@ -1116,7 +1129,7 @@ contract Icosa is ERC20 {
 
             payoutIcsa = stake._payoutPreCapitalAddIcsa + (stake._stakePoints * payoutPerPointIcsa);
             payoutHdrn = stake._payoutPreCapitalAddHdrn + (stake._stakePoints * payoutPerPointHdrn);
-            payoutIcsa = _calcStakeBonus(stakerClass, payoutIcsa);
+            bonusIcsa = _calcStakeBonus(stakerClass, payoutIcsa);
             principal = stake._stakeAmount;
         }
 
@@ -1134,15 +1147,17 @@ contract Icosa is ERC20 {
         stake._minStakeLength          = 0;
         _stakeUpdate(icsaStakes[msg.sender], stake);
 
+        nftPoolIcsaCollected += bonusIcsa;
+
         // mint ICSA
-        if (payoutIcsa + principal > 0) { _mint(msg.sender, (payoutIcsa + principal)); }
+        if (payoutIcsa + principal > 0) { _mint(msg.sender, (payoutIcsa + principal + bonusIcsa)); }
 
         // transfer HDRN
         if (payoutHdrn > 0) { _hdrn.transfer(msg.sender, payoutHdrn); }
 
         emit ICSAStakeEnd(
             uint256(uint40 (block.timestamp))
-                |  (uint256(uint72(payoutIcsa))       << 40)
+                |  (uint256(uint72(payoutIcsa + bonusIcsa))       << 40)
                 |  (uint256(uint72(payoutHdrn))       << 112)
                 |  (uint256(uint72(principalPenalty)) << 184),
             uint256(uint128(payoutPenaltyIcsa))
@@ -1150,7 +1165,7 @@ contract Icosa is ERC20 {
             msg.sender
         );
 
-        return (payoutIcsa, payoutHdrn, principalPenalty, payoutPenaltyIcsa, payoutPenaltyHdrn);
+        return ((payoutIcsa + bonusIcsa), payoutHdrn, principalPenalty, payoutPenaltyIcsa, payoutPenaltyHdrn);
     }
 
     // NFT Staking
