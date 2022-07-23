@@ -49,7 +49,6 @@ contract Icosa is ERC20 {
     address         private constant _hexAddress      = address(0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39);
     address         private constant _hdrnAddress     = address(0x3819f64f282bf135d62168C1e513280dAF905e06);
     address         private constant _maxiAddress     = address(0x0d86EB9f43C57f6FF3BC9E23D8F9d82503f0e84b);
-    address         private constant _plsdAddress     = address(0x34F0915a5f15a66Eba86F6a58bE1A471FB7836A7);
     address payable private constant _hdrnFlowAddress = payable(address(0xF447BE386164dADfB5d1e7622613f289F17024D8));
 
     // We Are All the SA
@@ -123,7 +122,6 @@ contract Icosa is ERC20 {
         _uniswapPools[_hexAddress]  = address(0x69D91B94f0AaF8e8A2586909fA77A5c2c89818d5); // HEX/USDC  V3 0.3%
         _uniswapPools[_hdrnAddress] = address(0xE859041c9C6D70177f83DE991B9d757E13CEA26E); // HDRN/USDC V3 1.0%
         _uniswapPools[_maxiAddress] = address(0xF5595d56ccB6Cb87a463C558cAD04f49Faa61149); // MAXI/USDC V3 1.0%
-        _uniswapPools[_plsdAddress] = address(0x3328CA5b535D537F88715b305375C591cF52d541); // PLSD/USDC V3 0.3%
     }
 
     function decimals()
@@ -1204,6 +1202,7 @@ contract Icosa is ERC20 {
                 "ICSA: Insufficient Ethereum sent");
 
             tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(_uniswapPools[_wethAddress]));
+            
             // weth pools are backwards for some reason.
             stakePoints = (amount * (2**96)) / tokenPrice;
 
@@ -1220,14 +1219,18 @@ contract Icosa is ERC20 {
             require(uniswapPool != address(0),
                 "ICSA: Invalid token address");
 
-            tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(uniswapPool));
-
             // weth pools are backwards for some reason.
             if (tokenAddress == _wethAddress) {
+                tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(uniswapPool));
                 stakePoints = (amount * (2**96)) / tokenPrice;
             }
 
+            else if (tokenAddress == _usdcAddress) {
+                stakePoints = amount;
+            }
+
             else {
+                tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(uniswapPool));
                 stakePoints = (amount * tokenPrice) / (2 ** 96);
             }
 
