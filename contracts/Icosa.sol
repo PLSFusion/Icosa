@@ -1188,25 +1188,18 @@ contract Icosa is ERC20 {
             "ICSA: WAATSA entry has closed");
 
         // Fallback in case PulseChain launches mid-WAATSA
-        require(block.chainid == 1, 
-            "ICSA: WAATSA is only supported on Ethereum");
+        //require(block.chainid == 1, 
+        //    "ICSA: WAATSA is only supported on Ethereum");
 
-        uint256 tokenPrice;
+        // uint256 tokenPrice;
         uint256 stakePoints;
 
         IERC20 token = IERC20(tokenAddress);
 
         // ETH handler
         if (tokenAddress == address(0)) {
-            require(msg.value == amount,
-                "ICSA: Insufficient Ethereum sent");
-
-            tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(_uniswapPools[_wethAddress]));
-            
-            // weth pools are backwards for some reason.
-            stakePoints = (amount * (2**96)) / tokenPrice;
-
-            _hdrnFlowAddress.transfer(amount);
+            // only take USDC for testnet
+            revert();
         }
 
         // ERC20 handler
@@ -1221,8 +1214,8 @@ contract Icosa is ERC20 {
 
             // weth pools are backwards for some reason.
             if (tokenAddress == _wethAddress) {
-                tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(uniswapPool));
-                stakePoints = (amount * (2**96)) / tokenPrice;
+                // only take USDC for testnet
+                revert();
             }
 
             else if (tokenAddress == _usdcAddress) {
@@ -1230,8 +1223,8 @@ contract Icosa is ERC20 {
             }
 
             else {
-                tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(uniswapPool));
-                stakePoints = (amount * tokenPrice) / (2 ** 96);
+                // only take USDC for testnet
+                revert();
             }
 
             token.transferFrom(msg.sender, _hdrnFlowAddress, amount);
