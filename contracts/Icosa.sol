@@ -664,7 +664,7 @@ contract Icosa is ERC20 {
 
         // mint ICSA to the caller
         uint256 borrowableHdrn = share._stake.stakeShares * (share._stake.stakedDays - share._mintedDays);
-        uint256 payout         = borrowableHdrn / hexGlobals.shareRate;
+        uint256 payout         = borrowableHdrn / (hexGlobals.shareRate / 10);
         
         require(payout > 0,
             "ICSA: Insufficient HSI value");
