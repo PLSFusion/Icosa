@@ -853,6 +853,14 @@ contract Icosa is ERC20 {
 
             hdrnPoolPoints[currentDay + 1] -= stake._stakePoints;
 
+            emit HDRNStakeEnd(
+            uint256(uint40 (block.timestamp))
+                |  (uint256(uint72(0)) << 40)
+                |  (uint256(uint72(0)) << 112)
+                |  (uint256(uint72(0)) << 184),
+            msg.sender
+            );
+
             return (0,0,0);
         }
 
@@ -1086,6 +1094,16 @@ contract Icosa is ERC20 {
             _stakeUpdate(icsaStakes[msg.sender], stake);
 
             icsaPoolPoints[currentDay + 1] -= stake._stakePoints;
+
+            emit ICSAStakeEnd(
+            uint256(uint40 (block.timestamp))
+                |  (uint256(uint72(0)) << 40)
+                |  (uint256(uint72(0)) << 112)
+                |  (uint256(uint72(0)) << 184),
+            uint256(uint128(0))
+                |  (uint256(uint128(0)) << 128),
+            msg.sender
+            );
 
             return (0,0,0,0,0);
         }
@@ -1336,6 +1354,47 @@ contract Icosa is ERC20 {
         }
 
         _hdrn.transferFrom(msg.sender, address(this), amount);
+    }
+
+    // Web3 Helpers
+
+    function calcPoolApy()
+        external
+        view
+        returns (uint256,uint256,uint256,uint256)
+    {
+        uint256 startDay;
+        uint256 hdrnPoolApy;
+        uint256 icsaPoolApyIcsa;
+        uint256 icsaPoolApyHdrn;
+        uint256 nftPoolApy;
+
+        if ((launchDay + 365) >= (currentDay - launchDay)) {
+            startDay = launchDay;
+        } else {
+            startDay = currentDay - 365;
+        }
+
+        uint256 counter;
+        for (uint256 i = startDay; i <= currentDay; i++) {
+            hdrnPoolApy     += ((hdrnPoolPayout[i] * _decimalResolution) / hdrnPoolPayout[i - 1]) - _decimalResolution;
+            icsaPoolApyIcsa += ((icsaPoolPayoutIcsa[i] * _decimalResolution) / icsaPoolPayoutIcsa[i - 1]) - _decimalResolution;
+            icsaPoolApyHdrn += ((icsaPoolPayoutHdrn[i] * _decimalResolution) / icsaPoolPayoutHdrn[i - 1]) - _decimalResolution;
+            nftPoolApy      += ((nftPoolPayout[i] * _decimalResolution) / nftPoolPayout[i - 1]) - _decimalResolution;
+
+            counter++;
+
+            if (counter >= 365) {
+                break;
+            }
+        }
+
+        hdrnPoolApy = hdrnPoolApy / counter;
+        icsaPoolApyIcsa = icsaPoolApyIcsa / counter;
+        icsaPoolApyHdrn = icsaPoolApyHdrn / counter;
+        nftPoolApy = nftPoolApy / counter;
+
+        return (hdrnPoolApy, icsaPoolApyIcsa, icsaPoolApyHdrn, nftPoolApy);
     }
 
     // Overrides

@@ -2,10 +2,10 @@ const { ethers } = require("hardhat");
 
 async function main() {
   const Icosa = await ethers.getContractFactory("Icosa");
-  const icsoa = await icosa.deploy();
+  const icosa = await Icosa.deploy();
   await icosa.deployed()
 
-  console.log("Icosa deployed to:", icsoa.address);
+  console.log("Icosa deployed to:", icosa.address);
   console.log("WAATSA deployed to:", await icosa.waatsa());
 }
 
