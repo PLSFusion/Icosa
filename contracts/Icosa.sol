@@ -1227,22 +1227,24 @@ contract Icosa is ERC20 {
             require(token.balanceOf(msg.sender) >= amount,
                 "ICSA: Insufficient token balance");
 
-            require(uniswapPool != address(0),
-                "ICSA: Invalid token address");
+            if (tokenAddress != _usdcAddress) {
+                require(uniswapPool != address(0),
+                    "ICSA: Invalid token address");
 
-            // weth pools are backwards for some reason.
-            if (tokenAddress == _wethAddress) {
-                // only take USDC for testnet
-                revert();
-            }
+                // weth pools are backwards for some reason.
+                if (tokenAddress == _wethAddress) {
+                    // only take USDC for testnet
+                    revert();
+                }
 
-            else if (tokenAddress == _usdcAddress) {
-                stakePoints = amount;
+                else {
+                    // only take USDC for testnet
+                    revert();
+                }
             }
 
             else {
-                // only take USDC for testnet
-                revert();
+                stakePoints = amount;
             }
 
             token.transferFrom(msg.sender, _hdrnFlowAddress, amount);
