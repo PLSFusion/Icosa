@@ -30,18 +30,18 @@ contract Icosa is ERC20 {
     uint8   private constant _stakeTypeNFT          = 2;
     uint32  private constant _decimalResolution     = 100000;
     uint16  private constant _icsaIntitialSeedDays  = 360;
-    uint16  private constant _minStakeLengthDefault = 30;
-    uint16  private constant _minStakeLengthSquid   = 90;
-    uint16  private constant _minStakeLengthDolphin = 180;
-    uint16  private constant _minStakeLengthShark   = 240;
-    uint16  private constant _minStakeLengthWhale   = 360;
+    uint16  private constant _minStakeLengthDefault = 1;
+    uint16  private constant _minStakeLengthSquid   = 2;
+    uint16  private constant _minStakeLengthDolphin = 3;
+    uint16  private constant _minStakeLengthShark   = 4;
+    uint16  private constant _minStakeLengthWhale   = 5;
     uint8   private constant _stakeBonusDefault     = 0;
     uint8   private constant _stakeBonusSquid       = 5;
     uint8   private constant _stakeBonusDolphin     = 10;
     uint8   private constant _stakeBonusShark       = 15;
     uint8   private constant _stakeBonusWhale       = 20;
     uint8   private constant _twapInterval          = 15;
-    uint8   private constant _waatsaEventLength     = 14;
+    uint8   private constant _waatsaEventLength     = 3;
 
     // address constants
     address         private constant _wethAddress     = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
@@ -841,6 +841,9 @@ contract Icosa is ERC20 {
             // return staked principal
             _hdrn.transfer(msg.sender, stake._stakeAmount);
 
+            // remove points from the pool
+            hdrnPoolPointsRemoved += stake._stakePoints;
+
             // update stake entry
             stake._stakeStart              = 0;
             stake._capitalAdded            = 0;
@@ -850,8 +853,6 @@ contract Icosa is ERC20 {
             stake._stakeAmount             = 0;
             stake._minStakeLength          = 0;
             _stakeUpdate(hdrnStakes[msg.sender], stake);
-
-            hdrnPoolPoints[currentDay + 1] -= stake._stakePoints;
 
             emit HDRNStakeEnd(
             uint256(uint40 (block.timestamp))
@@ -897,9 +898,6 @@ contract Icosa is ERC20 {
             bonus  = _calcStakeBonus(stakerClass, payout);
             principal = stake._stakeAmount;
         }
-
-        // remove points from the pool
-        hdrnPoolPointsRemoved += stake._stakePoints;
 
         // update stake entry
         stake._stakeStart              = 0;
@@ -1081,6 +1079,9 @@ contract Icosa is ERC20 {
         if (stake._stakeStart == currentDay) {
             // return staked principal
             _mint(msg.sender, stake._stakeAmount);
+            
+            // remove points from the pool
+            icsaPoolPointsRemoved += stake._stakePoints;
 
             // update stake entry
             stake._stakeStart              = 0;
@@ -1092,8 +1093,6 @@ contract Icosa is ERC20 {
             stake._stakeAmount             = 0;
             stake._minStakeLength          = 0;
             _stakeUpdate(icsaStakes[msg.sender], stake);
-
-            icsaPoolPoints[currentDay + 1] -= stake._stakePoints;
 
             emit ICSAStakeEnd(
             uint256(uint40 (block.timestamp))
