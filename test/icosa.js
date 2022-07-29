@@ -75,7 +75,7 @@ describe("Icosa", function () {
     // ending two days later should result in roughly double day1 payout
     await network.provider.send("evm_increaseTime", [86400])
     await ethers.provider.send('evm_mine');
-    expect(await icosa.connect(sa).callStatic.nftStakeEnd(1)).lte(payoutDay1 * 2);
+    expect(await icosa.connect(sa).callStatic.nftStakeEnd(1)).to.be.closeTo(payoutDay1.mul(2), 1);
 
     // end the stake move to last day of WAATSA, start a new one.
     await icosa.connect(sa).nftStakeEnd(1);
@@ -97,7 +97,9 @@ describe("Icosa", function () {
     await network.provider.send("evm_increaseTime", [86400])
     await ethers.provider.send('evm_mine');
     expect(await icosa.connect(sa).callStatic.nftStakeEnd(2)).gt(payoutDay1);
+    
     await icosa.connect(sa).nftStakeEnd(2);
+    await icosa.connect(sa).nftStakeEnd(3);
   });
 
   it("Should pass Hedron staking sanity checks", async function () {
@@ -274,5 +276,15 @@ describe("Icosa", function () {
 
     // double end should fail
     await expect(icosa.connect(sa).icsaStakeEnd()).to.be.revertedWith("ICSA: Stake does not exist");
+
+    await network.provider.send("evm_increaseTime", [86400])
+    await ethers.provider.send('evm_mine');
+
+    await icosa.connect(sa).approve(oa.address, 0);
+
+    currentDay = await icosa.currentDay();
+    expect (await icosa.hdrnPoolPoints(currentDay)).equals(0);
+    expect (await icosa.icsaPoolPoints(currentDay)).equals(0);
+    expect (await icosa.nftPoolPoints(currentDay)).equals(0);
   });
 });

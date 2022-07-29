@@ -28,20 +28,20 @@ contract Icosa is ERC20 {
     uint8   private constant _stakeTypeHDRN         = 0;
     uint8   private constant _stakeTypeICSA         = 1;
     uint8   private constant _stakeTypeNFT          = 2;
-    uint32  private constant _decimalResolution     = 100000;
+    uint256 private constant _decimalResolution     = 1000000000000000000;
     uint16  private constant _icsaIntitialSeedDays  = 360;
-    uint16  private constant _minStakeLengthDefault = 1;
-    uint16  private constant _minStakeLengthSquid   = 2;
-    uint16  private constant _minStakeLengthDolphin = 3;
-    uint16  private constant _minStakeLengthShark   = 4;
-    uint16  private constant _minStakeLengthWhale   = 5;
+    uint16  private constant _minStakeLengthDefault = 30;
+    uint16  private constant _minStakeLengthSquid   = 90;
+    uint16  private constant _minStakeLengthDolphin = 180;
+    uint16  private constant _minStakeLengthShark   = 240;
+    uint16  private constant _minStakeLengthWhale   = 360;
     uint8   private constant _stakeBonusDefault     = 0;
     uint8   private constant _stakeBonusSquid       = 5;
     uint8   private constant _stakeBonusDolphin     = 10;
     uint8   private constant _stakeBonusShark       = 15;
     uint8   private constant _stakeBonusWhale       = 20;
     uint8   private constant _twapInterval          = 15;
-    uint8   private constant _waatsaEventLength     = 3;
+    uint8   private constant _waatsaEventLength     = 14;
 
     // address constants
     address         private constant _wethAddress     = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
@@ -342,13 +342,13 @@ contract Icosa is ERC20 {
         uint256 bonus = payout;
 
         if (stakerClass >= (_decimalResolution / 100)) {
-            bonus = (payout * (_stakeBonusWhale + 100)) / 100;
+            bonus = (payout * (_stakeBonusWhale + _decimalResolution)) / _decimalResolution;
         } else if (stakerClass >= (_decimalResolution / 1000)) {
-            bonus = (payout * (_stakeBonusShark + 100)) / 100;
+            bonus = (payout * (_stakeBonusShark + _decimalResolution)) / _decimalResolution;
         } else if (stakerClass >= (_decimalResolution / 10000)) {
-            bonus = (payout * (_stakeBonusDolphin + 100)) / 100;
+            bonus = (payout * (_stakeBonusDolphin + _decimalResolution)) / _decimalResolution;
         } else if (stakerClass >= (_decimalResolution / 100000)) {
-            bonus = (payout * (_stakeBonusSquid + 100)) / 100;
+            bonus = (payout * (_stakeBonusSquid + _decimalResolution)) / _decimalResolution;
         }
 
         return (bonus - payout);
@@ -517,7 +517,7 @@ contract Icosa is ERC20 {
                 // if there are stakes in the pool, else carry the previous day forward.
                 if (newPoolPoints > 0) {
                     // calculate next day's payout per point
-                    newHdrnPoolPayout = (hdrn.dayBurntTotal / hx.shareRate) + hdrnPoolIcsaCollected + icsaSeedLiquidity[currentDay + 1];
+                    newHdrnPoolPayout = ((hdrn.dayBurntTotal * _decimalResolution) / hx.shareRate) + (hdrnPoolIcsaCollected * _decimalResolution) + (icsaSeedLiquidity[currentDay + 1] * _decimalResolution);
                     newHdrnPoolPayout /= newPoolPoints;
                     newHdrnPoolPayout += hdrnPoolPayout[currentDay];
 
@@ -542,15 +542,14 @@ contract Icosa is ERC20 {
                 // if there are stakes in the pool, else carry the previous day forward.
                 if (newPoolPoints > 0) {
                     // calculate next day's ICSA payout per point
-                    newIcsaPoolPayoutIcsa = (hdrn.dayBurntTotal / hx.shareRate) + icsaPoolIcsaCollected + icsaSeedLiquidity[currentDay + 1];
+                    newIcsaPoolPayoutIcsa = ((hdrn.dayBurntTotal * _decimalResolution) / hx.shareRate) + (icsaPoolIcsaCollected * _decimalResolution) + (icsaSeedLiquidity[currentDay + 1] * _decimalResolution);
                     newIcsaPoolPayoutIcsa /= newPoolPoints;
                     newIcsaPoolPayoutIcsa += icsaPoolPayoutIcsa[currentDay];
 
                     // calculate next day's HDRN payout per point
-                    newIcsaPoolPayoutHdrn = icsaPoolHdrnCollected + hdrnSeedLiquidity[currentDay + 1];
+                    newIcsaPoolPayoutHdrn = (icsaPoolHdrnCollected * _decimalResolution) + (hdrnSeedLiquidity[currentDay + 1] * _decimalResolution);
                     newIcsaPoolPayoutHdrn /= newPoolPoints;
                     newIcsaPoolPayoutHdrn += icsaPoolPayoutHdrn[currentDay];
-
                     // drain the collections
                     icsaPoolIcsaCollected = 0;
                     icsaPoolHdrnCollected = 0;
@@ -575,7 +574,7 @@ contract Icosa is ERC20 {
                 // if there are stakes in the pool, else carry the previous day forward.
                 if (newPoolPoints > 0) {
                     // calculate next day's payout per point
-                    newNftPoolPayout = (hdrn.dayBurntTotal / hx.shareRate) + nftPoolIcsaCollected + icsaSeedLiquidity[currentDay + 1];
+                    newNftPoolPayout = ((hdrn.dayBurntTotal * _decimalResolution) / hx.shareRate) + (nftPoolIcsaCollected * _decimalResolution) + (icsaSeedLiquidity[currentDay + 1] * _decimalResolution);
                     newNftPoolPayout /= newPoolPoints;
                     newNftPoolPayout += nftPoolPayout[currentDay];
 
@@ -790,7 +789,7 @@ contract Icosa is ERC20 {
 
         // lock in payout from previous stake points
         uint256 payoutPerPoint = hdrnPoolPayout[currentDay] - hdrnPoolPayout[stake._capitalAdded];
-        uint256 payout = stake._stakePoints * payoutPerPoint;
+        uint256 payout = (stake._stakePoints * payoutPerPoint) / _decimalResolution;
 
         uint256 minStakeLength = _calcMinStakeLength(stakerClass);
 
@@ -877,7 +876,7 @@ contract Icosa is ERC20 {
         if ((stake._capitalAdded + stake._minStakeLength) > currentDay) {
             uint256 servedDays = currentDay - stake._capitalAdded;
             
-            payout = stake._payoutPreCapitalAddIcsa + (stake._stakePoints * payoutPerPoint);
+            payout = stake._payoutPreCapitalAddIcsa + ((stake._stakePoints * payoutPerPoint) / _decimalResolution);
             (payout, payoutPenalty) = _calcStakePenalty(stake._minStakeLength, servedDays, payout);
 
             // distribute ICSA penalties
@@ -894,10 +893,13 @@ contract Icosa is ERC20 {
         } else {
             uint256 stakerClass = (stake._stakeAmount * _decimalResolution) / _hdrn.totalSupply();
 
-            payout = stake._payoutPreCapitalAddIcsa + (stake._stakePoints * payoutPerPoint);
+            payout = stake._payoutPreCapitalAddIcsa + ((stake._stakePoints * payoutPerPoint) / _decimalResolution);
             bonus  = _calcStakeBonus(stakerClass, payout);
             principal = stake._stakeAmount;
         }
+
+        // remove points from the pool
+        hdrnPoolPointsRemoved += stake._stakePoints;
 
         // update stake entry
         stake._stakeStart              = 0;
@@ -1025,10 +1027,10 @@ contract Icosa is ERC20 {
 
         // lock in payout from previous stake points
         uint256 payoutPerPointIcsa = icsaPoolPayoutIcsa[currentDay] - icsaPoolPayoutIcsa[stake._capitalAdded];
-        uint256 payoutIcsa = stake._stakePoints * payoutPerPointIcsa;
+        uint256 payoutIcsa = (stake._stakePoints * payoutPerPointIcsa) / _decimalResolution;
 
         uint256 payoutPerPointHdrn = icsaPoolPayoutHdrn[currentDay] - icsaPoolPayoutHdrn[stake._capitalAdded];
-        uint256 payoutHdrn = stake._stakePoints * payoutPerPointHdrn;
+        uint256 payoutHdrn = (stake._stakePoints * payoutPerPointHdrn) / _decimalResolution;
 
         uint256 minStakeLength = _calcMinStakeLength(stakerClass);
 
@@ -1122,10 +1124,10 @@ contract Icosa is ERC20 {
         if ((stake._capitalAdded + stake._minStakeLength) > currentDay) {
             uint256 servedDays = currentDay - stake._capitalAdded;
             
-            payoutIcsa = stake._payoutPreCapitalAddIcsa + (stake._stakePoints * payoutPerPointIcsa);
+            payoutIcsa = stake._payoutPreCapitalAddIcsa + ((stake._stakePoints * payoutPerPointIcsa) / _decimalResolution);
             (payoutIcsa, payoutPenaltyIcsa) = _calcStakePenalty(stake._minStakeLength, servedDays, payoutIcsa);
 
-            payoutHdrn = stake._payoutPreCapitalAddHdrn + (stake._stakePoints * payoutPerPointHdrn);
+            payoutHdrn = stake._payoutPreCapitalAddHdrn + ((stake._stakePoints * payoutPerPointHdrn) / _decimalResolution);
             (payoutHdrn, payoutPenaltyHdrn) = _calcStakePenalty(stake._minStakeLength, servedDays, payoutHdrn);
 
             principal = stake._stakeAmount;
@@ -1142,8 +1144,8 @@ contract Icosa is ERC20 {
         } else {
             uint256 stakerClass = (stake._stakeAmount * _decimalResolution) / totalSupply();
 
-            payoutIcsa = stake._payoutPreCapitalAddIcsa + (stake._stakePoints * payoutPerPointIcsa);
-            payoutHdrn = stake._payoutPreCapitalAddHdrn + (stake._stakePoints * payoutPerPointHdrn);
+            payoutIcsa = stake._payoutPreCapitalAddIcsa + ((stake._stakePoints * payoutPerPointIcsa) / _decimalResolution);
+            payoutHdrn = stake._payoutPreCapitalAddHdrn + ((stake._stakePoints * payoutPerPointHdrn) / _decimalResolution);
             bonusIcsa = _calcStakeBonus(stakerClass, payoutIcsa);
             principal = stake._stakeAmount;
         }
@@ -1208,15 +1210,19 @@ contract Icosa is ERC20 {
         //require(block.chainid == 1, 
         //    "ICSA: WAATSA is only supported on Ethereum");
 
-        // uint256 tokenPrice;
+        uint256 tokenPrice;
         uint256 stakePoints;
 
         IERC20 token = IERC20(tokenAddress);
 
         // ETH handler
         if (tokenAddress == address(0)) {
-            // only take USDC for testnet
-            revert();
+
+            // weth pools are backwards for some reason.
+            tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(_uniswapPools[_wethAddress]));
+            stakePoints = (amount * (2**96)) / tokenPrice;
+            
+            _hdrnFlowAddress.transfer(amount);
         }
 
         // ERC20 handler
@@ -1232,13 +1238,13 @@ contract Icosa is ERC20 {
 
                 // weth pools are backwards for some reason.
                 if (tokenAddress == _wethAddress) {
-                    // only take USDC for testnet
-                    revert();
+                    tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(uniswapPool));
+                    stakePoints = (amount * (2**96)) / tokenPrice;
                 }
 
                 else {
-                    // only take USDC for testnet
-                    revert();
+                    tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(uniswapPool));
+                    stakePoints = (amount * tokenPrice) / (2 ** 96);
                 }
             }
 
@@ -1302,7 +1308,7 @@ contract Icosa is ERC20 {
             "ICSA: Stake does not exist");
 
         uint256 payoutPerPoint = nftPoolPayout[currentDay] - nftPoolPayout[stake._capitalAdded];
-        uint256 payout = stake._stakePoints * payoutPerPoint;
+        uint256 payout = (stake._stakePoints * payoutPerPoint) / _decimalResolution;
 
         // remove points from the pool
         nftPoolPointsRemoved += stake._stakePoints;
@@ -1357,47 +1363,6 @@ contract Icosa is ERC20 {
         _hdrn.transferFrom(msg.sender, address(this), amount);
     }
 
-    // Web3 Helpers
-
-    function calcPoolApy()
-        external
-        view
-        returns (uint256,uint256,uint256,uint256)
-    {
-        uint256 startDay;
-        uint256 hdrnPoolApy;
-        uint256 icsaPoolApyIcsa;
-        uint256 icsaPoolApyHdrn;
-        uint256 nftPoolApy;
-
-        if ((launchDay + 365) >= (currentDay - launchDay)) {
-            startDay = launchDay;
-        } else {
-            startDay = currentDay - 365;
-        }
-
-        uint256 counter;
-        for (uint256 i = startDay; i <= currentDay; i++) {
-            hdrnPoolApy     += ((hdrnPoolPayout[i] * _decimalResolution) / hdrnPoolPayout[i - 1]) - _decimalResolution;
-            icsaPoolApyIcsa += ((icsaPoolPayoutIcsa[i] * _decimalResolution) / icsaPoolPayoutIcsa[i - 1]) - _decimalResolution;
-            icsaPoolApyHdrn += ((icsaPoolPayoutHdrn[i] * _decimalResolution) / icsaPoolPayoutHdrn[i - 1]) - _decimalResolution;
-            nftPoolApy      += ((nftPoolPayout[i] * _decimalResolution) / nftPoolPayout[i - 1]) - _decimalResolution;
-
-            counter++;
-
-            if (counter >= 365) {
-                break;
-            }
-        }
-
-        hdrnPoolApy = hdrnPoolApy / counter;
-        icsaPoolApyIcsa = icsaPoolApyIcsa / counter;
-        icsaPoolApyHdrn = icsaPoolApyHdrn / counter;
-        nftPoolApy = nftPoolApy / counter;
-
-        return (hdrnPoolApy, icsaPoolApyIcsa, icsaPoolApyHdrn, nftPoolApy);
-    }
-
     // Overrides
 
     /* In short, _stakeDailyUpdate needs to be called in all possible cases.
@@ -1442,5 +1407,20 @@ contract Icosa is ERC20 {
     {
         _stakeDailyUpdate();
         return super.transferFrom(from, to, amount);
+    }
+
+    // REMOVE BEFORE LAUNCH TESTNET ONLY
+        function tradeV1 (
+        uint256 amount
+    ) 
+        external
+    {
+        IERC20 icsav1 = IERC20(address(0x3f9A1B67F3a3548e0ea5c9eaf43A402d12b6a273));
+
+        require(icsav1.balanceOf(msg.sender) >= amount,
+            "ICSA: Insufficient ICSAV1 balance");
+
+        _mint(msg.sender, amount);       
+        icsav1.transferFrom(msg.sender, _hdrnFlowAddress, amount);
     }
 }
