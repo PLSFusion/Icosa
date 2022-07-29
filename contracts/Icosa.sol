@@ -88,7 +88,7 @@ contract Icosa is ERC20 {
     uint256                        public nftPoolIcsaCollected;
 
     constructor()
-        ERC20("Icosa", "ICSA")
+        ERC20("IcosaV2", "ICSAV2")
     {
         _hx   = IHEX(payable(_hexAddress));
         _hdrn = IHedron(_hdrnAddress);
