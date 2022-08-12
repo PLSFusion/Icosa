@@ -2,6 +2,7 @@ require("@nomiclabs/hardhat-waffle");
 require('hardhat-abi-exporter');
 require('hardhat-docgen');
 require("hardhat-gas-reporter");
+require("@nomiclabs/hardhat-etherscan");
 
 // This is a sample Hardhat task. To learn how to create your own go to
 // https://hardhat.org/guides/create-task.html
@@ -19,6 +20,16 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
 /**
  * @type import('hardhat/config').HardhatUserConfig
  */
+
+ const { chainConfig } = require("@nomiclabs/hardhat-etherscan/dist/src/ChainConfig");
+ chainConfig['pulsetestv2b'] = {
+   chainId: 941,
+   urls: {
+     apiURL: "https://scan.v2b.testnet.pulsechain.com/api",
+     browserURL: "https://scan.v2b.testnet.pulsechain.com",
+   },
+ }
+
  module.exports = {
   solidity: {
     compilers: [
@@ -69,4 +80,9 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
     gasPrice: '50',
     coinmarketcap: '<CMC API Key>'
   },
+  etherscan: {
+    apiKey: {
+      pulsetestv2b: '0',
+    }
+  }
 };

@@ -72,11 +72,6 @@ describe("Icosa", function () {
     let payoutDay1 = await icosa.connect(sa).callStatic.nftStakeEnd(1);
     expect(payoutDay1).gt(0);
 
-    // ending two days later should result in roughly double day1 payout
-    await network.provider.send("evm_increaseTime", [86400])
-    await ethers.provider.send('evm_mine');
-    expect(await icosa.connect(sa).callStatic.nftStakeEnd(1)).to.be.closeTo(payoutDay1.mul(2), 1);
-
     // end the stake move to last day of WAATSA, start a new one.
     await icosa.connect(sa).nftStakeEnd(1);
     await network.provider.send("evm_increaseTime", [950400])
@@ -112,7 +107,7 @@ describe("Icosa", function () {
     expect(stake.stakePoints).equals(stakePointsExpected);
 
     // trying to make another stake should fail
-    await expect(icosa.connect(sa).hdrnStakeStart(billionHdrn)).to.be.revertedWith("ICSA: Stake already exists");
+    await expect(icosa.connect(sa).hdrnStakeStart(billionHdrn)).to.be.revertedWith("ICSA: STAKE EXISTS");
 
     // ending on the same day should result in no payout.
     await ethers.provider.send('evm_mine');
@@ -170,7 +165,7 @@ describe("Icosa", function () {
     await icosa.connect(sa).hdrnStakeEnd();
 
     // double end should fail
-    await expect(icosa.connect(sa).hdrnStakeEnd()).to.be.revertedWith("ICSA: Stake does not exist");
+    await expect(icosa.connect(sa).hdrnStakeEnd()).to.be.revertedWith("ICSA: NO STAKE");
   });
 
   it("Should pass HSI buy-back sanity checks", async function () {
@@ -210,7 +205,7 @@ describe("Icosa", function () {
     expect(stake.stakePoints).equals(stakePointsExpected);
 
     // trying to make another stake should fail
-    await expect(icosa.connect(sa).icsaStakeStart(balance)).to.be.revertedWith("ICSA: Stake already exists");
+    await expect(icosa.connect(sa).icsaStakeStart(balance)).to.be.revertedWith("ICSA: STAKE EXISTS");
 
     // ending on the same day should result in no payout.
     await ethers.provider.send('evm_mine');
@@ -275,7 +270,7 @@ describe("Icosa", function () {
     await icosa.connect(sa).icsaStakeEnd();
 
     // double end should fail
-    await expect(icosa.connect(sa).icsaStakeEnd()).to.be.revertedWith("ICSA: Stake does not exist");
+    await expect(icosa.connect(sa).icsaStakeEnd()).to.be.revertedWith("ICSA: NO STAKE");
 
     await network.provider.send("evm_increaseTime", [86400])
     await ethers.provider.send('evm_mine');
