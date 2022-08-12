@@ -74,7 +74,7 @@ contract WeAreAllTheSA is ERC721, ERC721Enumerable, RoyaltiesV2Impl {
         returns (uint256)
     {
         require(msg.sender == _creator,
-            "WAATSA: Caller must be contract creator");
+            "WAATSA: NOT ICSA");
 
         _tokenIds.increment();
         uint256 newTokenId = _tokenIds.current();
@@ -89,7 +89,7 @@ contract WeAreAllTheSA is ERC721, ERC721Enumerable, RoyaltiesV2Impl {
         external
     {
         require(msg.sender == _creator,
-            "WAATSA: Caller must be contract creator");
+            "WAATSA: NOT ICSA");
 
         _burn(tokenId);
     }

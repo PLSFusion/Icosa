@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import "@uniswap/v3-core/contracts/libraries/FixedPoint96.sol";
 import "./interfaces/Hedron.sol";
@@ -18,7 +19,7 @@ import "./uniswap/FullMath.sol";
 /* Icosa is a collection of Ethereum / PulseChain smart contracts that  *
  * build upon the Hedron smart contract to provide additional functionality */
 
-contract Icosa is ERC20 {
+contract Icosa is ERC20, ReentrancyGuard {
 
     IHEX    private _hx;
     IHedron private _hdrn;
@@ -28,12 +29,12 @@ contract Icosa is ERC20 {
     uint8   private constant _stakeTypeHDRN         = 0;
     uint8   private constant _stakeTypeICSA         = 1;
     uint8   private constant _stakeTypeNFT          = 2;
-    uint32  private constant _decimalResolution     = 100000;
+    uint256 private constant _decimalResolution     = 1e18;
     uint16  private constant _icsaIntitialSeedDays  = 360;
     uint16  private constant _minStakeLengthDefault = 30;
     uint16  private constant _minStakeLengthSquid   = 90;
     uint16  private constant _minStakeLengthDolphin = 180;
-    uint16  private constant _minStakeLengthShark   = 240;
+    uint16  private constant _minStakeLengthShark   = 270;
     uint16  private constant _minStakeLengthWhale   = 360;
     uint8   private constant _stakeBonusDefault     = 0;
     uint8   private constant _stakeBonusSquid       = 5;
@@ -79,6 +80,7 @@ contract Icosa is ERC20 {
     uint256                        public icsaPoolPointsRemoved;
     uint256                        public icsaPoolIcsaCollected;
     uint256                        public icsaPoolHdrnCollected;
+    uint256                        public icsaStakedSupply;
     
     // NFT Staking
     mapping(uint256 => uint256)    public nftPoolPoints;
@@ -342,13 +344,13 @@ contract Icosa is ERC20 {
         uint256 bonus = payout;
 
         if (stakerClass >= (_decimalResolution / 100)) {
-            bonus = (payout * (_stakeBonusWhale + 100)) / 100;
+            bonus = (payout * (_stakeBonusWhale + _decimalResolution)) / _decimalResolution;
         } else if (stakerClass >= (_decimalResolution / 1000)) {
-            bonus = (payout * (_stakeBonusShark + 100)) / 100;
+            bonus = (payout * (_stakeBonusShark + _decimalResolution)) / _decimalResolution;
         } else if (stakerClass >= (_decimalResolution / 10000)) {
-            bonus = (payout * (_stakeBonusDolphin + 100)) / 100;
+            bonus = (payout * (_stakeBonusDolphin + _decimalResolution)) / _decimalResolution;
         } else if (stakerClass >= (_decimalResolution / 100000)) {
-            bonus = (payout * (_stakeBonusSquid + 100)) / 100;
+            bonus = (payout * (_stakeBonusSquid + _decimalResolution)) / _decimalResolution;
         }
 
         return (bonus - payout);
@@ -517,7 +519,7 @@ contract Icosa is ERC20 {
                 // if there are stakes in the pool, else carry the previous day forward.
                 if (newPoolPoints > 0) {
                     // calculate next day's payout per point
-                    newHdrnPoolPayout = (hdrn.dayBurntTotal / hx.shareRate) + hdrnPoolIcsaCollected + icsaSeedLiquidity[currentDay + 1];
+                    newHdrnPoolPayout = ((hdrn.dayBurntTotal * _decimalResolution) / hx.shareRate) + (hdrnPoolIcsaCollected * _decimalResolution) + (icsaSeedLiquidity[currentDay + 1] * _decimalResolution);
                     newHdrnPoolPayout /= newPoolPoints;
                     newHdrnPoolPayout += hdrnPoolPayout[currentDay];
 
@@ -542,15 +544,14 @@ contract Icosa is ERC20 {
                 // if there are stakes in the pool, else carry the previous day forward.
                 if (newPoolPoints > 0) {
                     // calculate next day's ICSA payout per point
-                    newIcsaPoolPayoutIcsa = (hdrn.dayBurntTotal / hx.shareRate) + icsaPoolIcsaCollected + icsaSeedLiquidity[currentDay + 1];
+                    newIcsaPoolPayoutIcsa = ((hdrn.dayBurntTotal * _decimalResolution) / hx.shareRate) + (icsaPoolIcsaCollected * _decimalResolution) + (icsaSeedLiquidity[currentDay + 1] * _decimalResolution);
                     newIcsaPoolPayoutIcsa /= newPoolPoints;
                     newIcsaPoolPayoutIcsa += icsaPoolPayoutIcsa[currentDay];
 
                     // calculate next day's HDRN payout per point
-                    newIcsaPoolPayoutHdrn = icsaPoolHdrnCollected + hdrnSeedLiquidity[currentDay + 1];
+                    newIcsaPoolPayoutHdrn = (icsaPoolHdrnCollected * _decimalResolution) + (hdrnSeedLiquidity[currentDay + 1] * _decimalResolution);
                     newIcsaPoolPayoutHdrn /= newPoolPoints;
                     newIcsaPoolPayoutHdrn += icsaPoolPayoutHdrn[currentDay];
-
                     // drain the collections
                     icsaPoolIcsaCollected = 0;
                     icsaPoolHdrnCollected = 0;
@@ -575,7 +576,7 @@ contract Icosa is ERC20 {
                 // if there are stakes in the pool, else carry the previous day forward.
                 if (newPoolPoints > 0) {
                     // calculate next day's payout per point
-                    newNftPoolPayout = (hdrn.dayBurntTotal / hx.shareRate) + nftPoolIcsaCollected + icsaSeedLiquidity[currentDay + 1];
+                    newNftPoolPayout = ((hdrn.dayBurntTotal * _decimalResolution) / hx.shareRate) + (nftPoolIcsaCollected * _decimalResolution) + (icsaSeedLiquidity[currentDay + 1] * _decimalResolution);
                     newNftPoolPayout /= newPoolPoints;
                     newNftPoolPayout += nftPoolPayout[currentDay];
 
@@ -651,12 +652,13 @@ contract Icosa is ERC20 {
         uint256 tokenId
     )
         external
+        nonReentrant
         returns (uint256)
     {
         _stakeDailyUpdate();
 
         require(_hsim.ownerOf(tokenId) == msg.sender,
-            "ICSA: Selling requires token ownership");
+            "ICSA: NOT OWNER");
 
         // load HSI stake data and HEX share rate
         HDRNShareCache memory share  = _hsiLoad(IHEXStakeInstance(_hsim.hsiToken(tokenId)));
@@ -664,10 +666,10 @@ contract Icosa is ERC20 {
 
         // mint ICSA to the caller
         uint256 borrowableHdrn = share._stake.stakeShares * (share._stake.stakedDays - share._mintedDays);
-        uint256 payout         = borrowableHdrn / hexGlobals.shareRate;
+        uint256 payout         = borrowableHdrn / (hexGlobals.shareRate / 10);
         
         require(payout > 0,
-            "ICSA: Insufficient HSI value");
+            "ICSA: LOW VALUE");
 
         uint256 qcBonus;
         uint256 hlBonus = ((payout * (1000 + share._launchBonus)) / 1000) - payout;
@@ -704,6 +706,7 @@ contract Icosa is ERC20 {
         uint256 amount
     )
         external
+        nonReentrant
         returns (uint256)
     {
         _stakeDailyUpdate();
@@ -713,10 +716,10 @@ contract Icosa is ERC20 {
         _stakeLoad(hdrnStakes[msg.sender], stake);
 
         require(stake._isActive == false,
-            "ICSA: Stake already exists");
+            "ICSA: STAKE EXISTS");
 
         require(_hdrn.balanceOf(msg.sender) >= amount,
-            "ICSA: Insufficient HDRN balance");
+            "ICSA: LOW BALANCE");
 
         // get the HEX share rate and calculate stake points
         HEXGlobals memory hexGlobals = _hexGlobalsLoad();
@@ -725,7 +728,7 @@ contract Icosa is ERC20 {
         uint256 stakerClass = (amount * _decimalResolution) / _hdrn.totalSupply();
         
         require(stakePoints > 0,
-            "ICSA: Insufficient stake size");
+            "ICSA: TOO SMALL");
 
         uint256 minStakeLength = _calcMinStakeLength(stakerClass);
 
@@ -765,6 +768,7 @@ contract Icosa is ERC20 {
         uint256 amount
     )
         external
+        nonReentrant
         returns (uint256)
     {
         _stakeDailyUpdate();
@@ -774,10 +778,10 @@ contract Icosa is ERC20 {
         _stakeLoad(hdrnStakes[msg.sender], stake);
 
         require(stake._isActive == true,
-            "ICSA: Stake does not exist");
+            "ICSA: NO STAKE");
 
         require(_hdrn.balanceOf(msg.sender) >= amount,
-            "ICSA: Insufficient HDRN balance");
+            "ICSA: LOW BALANCE");
 
         // get the HEX share rate and calculate additional stake points
         HEXGlobals memory hexGlobals = _hexGlobalsLoad();
@@ -786,11 +790,11 @@ contract Icosa is ERC20 {
         uint256 stakerClass = ((stake._stakeAmount + amount) * _decimalResolution) / _hdrn.totalSupply();
 
         require(stakePoints > 0,
-            "ICSA: Insufficient stake size");
+            "ICSA: TOO SMALL");
 
         // lock in payout from previous stake points
         uint256 payoutPerPoint = hdrnPoolPayout[currentDay] - hdrnPoolPayout[stake._capitalAdded];
-        uint256 payout = stake._stakePoints * payoutPerPoint;
+        uint256 payout = (stake._stakePoints * payoutPerPoint) / _decimalResolution;
 
         uint256 minStakeLength = _calcMinStakeLength(stakerClass);
 
@@ -825,6 +829,7 @@ contract Icosa is ERC20 {
      */
     function hdrnStakeEnd () 
         external
+        nonReentrant
         returns (uint256, uint256, uint256)
     {
         _stakeDailyUpdate();
@@ -834,12 +839,15 @@ contract Icosa is ERC20 {
         _stakeLoad(hdrnStakes[msg.sender], stake);
 
         require(stake._isActive == true,
-            "ICSA: Stake does not exist");
+            "ICSA: NO STAKE");
 
         // ended pending stake, just reverse it.
         if (stake._stakeStart == currentDay) {
             // return staked principal
             _hdrn.transfer(msg.sender, stake._stakeAmount);
+
+            // remove points from the pool
+            hdrnPoolPointsRemoved += stake._stakePoints;
 
             // update stake entry
             stake._stakeStart              = 0;
@@ -851,7 +859,13 @@ contract Icosa is ERC20 {
             stake._minStakeLength          = 0;
             _stakeUpdate(hdrnStakes[msg.sender], stake);
 
-            hdrnPoolPoints[currentDay + 1] -= stake._stakePoints;
+            emit HDRNStakeEnd(
+            uint256(uint40 (block.timestamp))
+                |  (uint256(uint72(0)) << 40)
+                |  (uint256(uint72(0)) << 112)
+                |  (uint256(uint72(0)) << 184),
+            msg.sender
+            );
 
             return (0,0,0);
         }
@@ -868,7 +882,7 @@ contract Icosa is ERC20 {
         if ((stake._capitalAdded + stake._minStakeLength) > currentDay) {
             uint256 servedDays = currentDay - stake._capitalAdded;
             
-            payout = stake._payoutPreCapitalAddIcsa + (stake._stakePoints * payoutPerPoint);
+            payout = stake._payoutPreCapitalAddIcsa + ((stake._stakePoints * payoutPerPoint) / _decimalResolution);
             (payout, payoutPenalty) = _calcStakePenalty(stake._minStakeLength, servedDays, payout);
 
             // distribute ICSA penalties
@@ -885,7 +899,7 @@ contract Icosa is ERC20 {
         } else {
             uint256 stakerClass = (stake._stakeAmount * _decimalResolution) / _hdrn.totalSupply();
 
-            payout = stake._payoutPreCapitalAddIcsa + (stake._stakePoints * payoutPerPoint);
+            payout = stake._payoutPreCapitalAddIcsa + ((stake._stakePoints * payoutPerPoint) / _decimalResolution);
             bonus  = _calcStakeBonus(stakerClass, payout);
             principal = stake._stakeAmount;
         }
@@ -933,6 +947,7 @@ contract Icosa is ERC20 {
         uint256 amount
     )
         external
+        nonReentrant
         returns (uint256)
     {
         _stakeDailyUpdate();
@@ -942,10 +957,10 @@ contract Icosa is ERC20 {
         _stakeLoad(icsaStakes[msg.sender], stake);
 
         require(stake._isActive == false,
-            "ICSA: Stake already exists");
+            "ICSA: STAKE EXISTS");
 
         require(balanceOf(msg.sender) >= amount,
-            "ICSA: Insufficient ICSA balance");
+            "ICSA: LOW BALANCE");
 
         // get the HEX share rate and calculate stake points
         HEXGlobals memory hexGlobals = _hexGlobalsLoad();
@@ -954,7 +969,7 @@ contract Icosa is ERC20 {
         uint256 stakerClass = (amount * _decimalResolution) / totalSupply();
         
         require(stakePoints > 0,
-            "ICSA: Insufficient stake size");
+            "ICSA: TOO SMALL");
 
         uint256 minStakeLength = _calcMinStakeLength(stakerClass);
 
@@ -970,6 +985,9 @@ contract Icosa is ERC20 {
 
         // add stake to the pool (following day)
         icsaPoolPoints[currentDay + 1] += stakePoints;
+
+        // increase staked supply metric
+        icsaStakedSupply += amount;
 
         // temporarily burn stakers ICSA
         _burn(msg.sender, amount);
@@ -994,6 +1012,7 @@ contract Icosa is ERC20 {
         uint256 amount
     )
         external
+        nonReentrant
         returns (uint256)
     {
         _stakeDailyUpdate();
@@ -1003,10 +1022,10 @@ contract Icosa is ERC20 {
         _stakeLoad(icsaStakes[msg.sender], stake);
 
         require(stake._isActive == true,
-            "ICSA: Stake does not exist");
+            "ICSA: NO STAKE");
 
         require(balanceOf(msg.sender) >= amount,
-            "ICSA: Insufficient ICSA balance");
+            "ICSA: LOW BALANCE");
 
         // get the HEX share rate and calculate additional stake points
         HEXGlobals memory hexGlobals = _hexGlobalsLoad();
@@ -1015,14 +1034,14 @@ contract Icosa is ERC20 {
         uint256 stakerClass = ((stake._stakeAmount + amount) * _decimalResolution) / totalSupply();
 
         require(stakePoints > 0,
-            "ICSA: Insufficient stake size");
+            "ICSA: TOO SMALL");
 
         // lock in payout from previous stake points
         uint256 payoutPerPointIcsa = icsaPoolPayoutIcsa[currentDay] - icsaPoolPayoutIcsa[stake._capitalAdded];
-        uint256 payoutIcsa = stake._stakePoints * payoutPerPointIcsa;
+        uint256 payoutIcsa = (stake._stakePoints * payoutPerPointIcsa) / _decimalResolution;
 
         uint256 payoutPerPointHdrn = icsaPoolPayoutHdrn[currentDay] - icsaPoolPayoutHdrn[stake._capitalAdded];
-        uint256 payoutHdrn = stake._stakePoints * payoutPerPointHdrn;
+        uint256 payoutHdrn = (stake._stakePoints * payoutPerPointHdrn) / _decimalResolution;
 
         uint256 minStakeLength = _calcMinStakeLength(stakerClass);
 
@@ -1037,6 +1056,9 @@ contract Icosa is ERC20 {
 
         // add additional points to the pool (following day)
         icsaPoolPoints[currentDay + 1] += stakePoints;
+
+        // increase staked supply metric
+        icsaStakedSupply += amount;
 
         // temporarily burn stakers ICSA
         _burn(msg.sender, amount);
@@ -1058,6 +1080,7 @@ contract Icosa is ERC20 {
      */
     function icsaStakeEnd () 
         external
+        nonReentrant
         returns (uint256, uint256, uint256, uint256, uint256)
     {
         _stakeDailyUpdate();
@@ -1067,12 +1090,18 @@ contract Icosa is ERC20 {
         _stakeLoad(icsaStakes[msg.sender], stake);
 
         require(stake._isActive == true,
-            "ICSA: Stake does not exist");
+            "ICSA: NO STAKE");
 
         // ended pending stake, just reverse it.
         if (stake._stakeStart == currentDay) {
             // return staked principal
             _mint(msg.sender, stake._stakeAmount);
+            
+            // remove points from the pool
+            icsaPoolPointsRemoved += stake._stakePoints;
+
+            // decrease staked supply metric
+            icsaStakedSupply -= stake._stakeAmount;
 
             // update stake entry
             stake._stakeStart              = 0;
@@ -1085,7 +1114,15 @@ contract Icosa is ERC20 {
             stake._minStakeLength          = 0;
             _stakeUpdate(icsaStakes[msg.sender], stake);
 
-            icsaPoolPoints[currentDay + 1] -= stake._stakePoints;
+            emit ICSAStakeEnd(
+            uint256(uint40 (block.timestamp))
+                |  (uint256(uint72(0)) << 40)
+                |  (uint256(uint72(0)) << 112)
+                |  (uint256(uint72(0)) << 184),
+            uint256(uint128(0))
+                |  (uint256(uint128(0)) << 128),
+            msg.sender
+            );
 
             return (0,0,0,0,0);
         }
@@ -1105,10 +1142,10 @@ contract Icosa is ERC20 {
         if ((stake._capitalAdded + stake._minStakeLength) > currentDay) {
             uint256 servedDays = currentDay - stake._capitalAdded;
             
-            payoutIcsa = stake._payoutPreCapitalAddIcsa + (stake._stakePoints * payoutPerPointIcsa);
+            payoutIcsa = stake._payoutPreCapitalAddIcsa + ((stake._stakePoints * payoutPerPointIcsa) / _decimalResolution);
             (payoutIcsa, payoutPenaltyIcsa) = _calcStakePenalty(stake._minStakeLength, servedDays, payoutIcsa);
 
-            payoutHdrn = stake._payoutPreCapitalAddHdrn + (stake._stakePoints * payoutPerPointHdrn);
+            payoutHdrn = stake._payoutPreCapitalAddHdrn + ((stake._stakePoints * payoutPerPointHdrn) / _decimalResolution);
             (payoutHdrn, payoutPenaltyHdrn) = _calcStakePenalty(stake._minStakeLength, servedDays, payoutHdrn);
 
             principal = stake._stakeAmount;
@@ -1125,14 +1162,17 @@ contract Icosa is ERC20 {
         } else {
             uint256 stakerClass = (stake._stakeAmount * _decimalResolution) / totalSupply();
 
-            payoutIcsa = stake._payoutPreCapitalAddIcsa + (stake._stakePoints * payoutPerPointIcsa);
-            payoutHdrn = stake._payoutPreCapitalAddHdrn + (stake._stakePoints * payoutPerPointHdrn);
+            payoutIcsa = stake._payoutPreCapitalAddIcsa + ((stake._stakePoints * payoutPerPointIcsa) / _decimalResolution);
+            payoutHdrn = stake._payoutPreCapitalAddHdrn + ((stake._stakePoints * payoutPerPointHdrn) / _decimalResolution);
             bonusIcsa = _calcStakeBonus(stakerClass, payoutIcsa);
             principal = stake._stakeAmount;
         }
 
         // remove points from the pool
         icsaPoolPointsRemoved += stake._stakePoints;
+
+        // decrease staked supply metric
+        icsaStakedSupply -= stake._stakeAmount;
 
         // update stake entry
         stake._stakeStart              = 0;
@@ -1180,16 +1220,17 @@ contract Icosa is ERC20 {
     )
         external
         payable
+        nonReentrant
         returns (uint256)
     {
         _stakeDailyUpdate();
 
         require(currentDay < (launchDay + _waatsaEventLength),
-            "ICSA: WAATSA entry has closed");
+            "ICSA: TOO LATE");
 
         // Fallback in case PulseChain launches mid-WAATSA
-        require(block.chainid == 1, 
-            "ICSA: WAATSA is only supported on Ethereum");
+        require(block.chainid == 1,
+            "ICSA: BAD CHAIN");
 
         uint256 tokenPrice;
         uint256 stakePoints;
@@ -1198,14 +1239,11 @@ contract Icosa is ERC20 {
 
         // ETH handler
         if (tokenAddress == address(0)) {
-            require(msg.value == amount,
-                "ICSA: Insufficient Ethereum sent");
 
-            tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(_uniswapPools[_wethAddress]));
-            
             // weth pools are backwards for some reason.
+            tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(_uniswapPools[_wethAddress]));
             stakePoints = (amount * (2**96)) / tokenPrice;
-
+            
             _hdrnFlowAddress.transfer(amount);
         }
 
@@ -1213,25 +1251,27 @@ contract Icosa is ERC20 {
         else {    
             address uniswapPool = _uniswapPools[tokenAddress];
 
-            require(token.balanceOf(msg.sender) >= amount,
-                "ICSA: Insufficient token balance");
-
             require(uniswapPool != address(0),
-                "ICSA: Invalid token address");
+                "ICSA: BAD TOKEN");
 
-            // weth pools are backwards for some reason.
-            if (tokenAddress == _wethAddress) {
-                tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(uniswapPool));
-                stakePoints = (amount * (2**96)) / tokenPrice;
-            }
+            require(token.balanceOf(msg.sender) >= amount,
+                "ICSA: LOW BALANCE");
 
-            else if (tokenAddress == _usdcAddress) {
-                stakePoints = amount;
+            if (tokenAddress != _usdcAddress) {
+                // weth pools are backwards for some reason.
+                if (tokenAddress == _wethAddress) {
+                    tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(uniswapPool));
+                    stakePoints = (amount * (2**96)) / tokenPrice;
+                }
+
+                else {
+                    tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(uniswapPool));
+                    stakePoints = (amount * tokenPrice) / (2 ** 96);
+                }
             }
 
             else {
-                tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(uniswapPool));
-                stakePoints = (amount * tokenPrice) / (2 ** 96);
+                stakePoints = amount;
             }
 
             token.transferFrom(msg.sender, _hdrnFlowAddress, amount);
@@ -1240,7 +1280,7 @@ contract Icosa is ERC20 {
         uint256 nftId = _waatsa.mintStakeNft(msg.sender);
 
         require(stakePoints > 0,
-            "ICSA: Insufficient stake size");
+            "ICSA: TOO SMALL");
 
         // add stake entry
         _stakeAdd (
@@ -1275,22 +1315,23 @@ contract Icosa is ERC20 {
         uint256 nftId
     ) 
         external
+        nonReentrant
         returns (uint256)
     {
         _stakeDailyUpdate();
 
         require(_waatsa.ownerOf(nftId) == msg.sender,
-            "ICSA: Ending WAATSA stake requires token ownership");
+            "ICSA: NOT OWNER");
         
         // load stake into memory
         StakeCache memory stake;
         _stakeLoad(nftStakes[nftId], stake);
 
         require(stake._isActive == true,
-            "ICSA: Stake does not exist");
+            "ICSA: NO STAKE");
 
         uint256 payoutPerPoint = nftPoolPayout[currentDay] - nftPoolPayout[stake._capitalAdded];
-        uint256 payout = stake._stakePoints * payoutPerPoint;
+        uint256 payout = (stake._stakePoints * payoutPerPoint) / _decimalResolution;
 
         // remove points from the pool
         nftPoolPointsRemoved += stake._stakePoints;
@@ -1325,12 +1366,13 @@ contract Icosa is ERC20 {
         uint256 seedDays
     ) 
         external
+        nonReentrant
     {
         require(_hdrn.balanceOf(msg.sender) >= amount,
-            "ICSA: Insufficient HDRN balance");
+            "ICSA: LOW BALANCE");
 
         require(seedDays >= 1,
-            "ICSA: Seed days must be at least 1");
+            "ICSA: LOW SEED");
 
         // calculate and seed ICSA liquidity
         HEXGlobals memory hx = _hexGlobalsLoad();
@@ -1381,7 +1423,7 @@ contract Icosa is ERC20 {
         address from,
         address to,
         uint256 amount
-    ) 
+    )
         public
         virtual
         override
