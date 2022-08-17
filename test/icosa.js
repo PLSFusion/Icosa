@@ -84,8 +84,8 @@ describe("Icosa", function () {
     expect(await icosa.connect(sa).callStatic.nftStakeEnd(2)).equals(0);
 
     // test other cryptos
-    await icosa.connect(sa).nftStakeStart(ethers.utils.parseEther("1.0"), '0x0000000000000000000000000000000000000000', {
-      value: ethers.utils.parseEther("1.0")
+    await icosa.connect(sa).nftStakeStart(ethers.utils.parseEther("10.0"), '0x0000000000000000000000000000000000000000', {
+      value: ethers.utils.parseEther("10.0")
     });
 
     // ending one day served should be greater than one day payout due to time skip of 12 days seed liquidity / burning.
