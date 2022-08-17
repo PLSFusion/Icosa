@@ -142,7 +142,7 @@ contract Icosa is ERC20, ReentrancyGuard {
         uint40  indexed stakeId
     );
 
-     event HDRNStakeStart(
+    event HDRNStakeStart(
         uint256         data,
         address indexed staker
     );
@@ -155,6 +155,12 @@ contract Icosa is ERC20, ReentrancyGuard {
     event HDRNStakeEnd(
         uint256         data,
         address indexed staker
+    );
+
+    event HDRNStakingStats (
+        uint256         data,
+        uint256         payout,
+        uint256 indexed stakeDay
     );
 
     event ICSAStakeStart(
@@ -173,6 +179,13 @@ contract Icosa is ERC20, ReentrancyGuard {
         address indexed staker
     );
 
+    event ICSAStakingStats (
+        uint256         data,
+        uint256         payoutIcsa,
+        uint256         payoutHdrn,
+        uint256 indexed stakeDay
+    );
+
     event NFTStakeStart(
         uint256         data,
         address indexed staker,
@@ -184,6 +197,12 @@ contract Icosa is ERC20, ReentrancyGuard {
         uint256         data,
         address indexed staker,
         uint96  indexed nftId
+    );
+
+    event NFTStakingStats (
+        uint256         data,
+        uint256         payout,
+        uint256 indexed stakeDay
     );
 
     /**
@@ -534,6 +553,15 @@ contract Icosa is ERC20, ReentrancyGuard {
 
                 hdrnPoolPayout[currentDay + 1] = newHdrnPoolPayout;
                 hdrnPoolPoints[currentDay + 1] = newPoolPoints;
+
+                emit HDRNStakingStats (
+                    uint256(uint48 (block.timestamp))
+                        |  (uint256(uint104(newPoolPoints)) << 48)
+                        |  (uint256(uint104(hdrnPoolPointsRemoved)) << 152),
+                    newHdrnPoolPayout,
+                    currentDay + 1
+                );
+
                 hdrnPoolPointsRemoved = 0;
 
                 // ICSA Staking
@@ -567,6 +595,16 @@ contract Icosa is ERC20, ReentrancyGuard {
                 icsaPoolPayoutIcsa[currentDay + 1] = newIcsaPoolPayoutIcsa;
                 icsaPoolPayoutHdrn[currentDay + 1] = newIcsaPoolPayoutHdrn;
                 icsaPoolPoints[currentDay + 1] = newPoolPoints;
+
+                emit ICSAStakingStats (
+                    uint256(uint48 (block.timestamp))
+                        |  (uint256(uint104(newPoolPoints)) << 48)
+                        |  (uint256(uint104(icsaPoolPointsRemoved)) << 152),
+                    newIcsaPoolPayoutIcsa,
+                    newIcsaPoolPayoutHdrn,
+                    currentDay + 1
+                );
+
                 icsaPoolPointsRemoved = 0;
 
                 // NFT Staking
@@ -591,6 +629,15 @@ contract Icosa is ERC20, ReentrancyGuard {
                 
                 nftPoolPayout[currentDay + 1] = newNftPoolPayout;
                 nftPoolPoints[currentDay + 1] = newPoolPoints;
+
+                emit NFTStakingStats (
+                    uint256(uint48 (block.timestamp))
+                        |  (uint256(uint104(newPoolPoints)) << 48)
+                        |  (uint256(uint104(nftPoolPointsRemoved)) << 152),
+                    newNftPoolPayout,
+                    currentDay + 1
+                );
+
                 nftPoolPointsRemoved = 0;
 
                 // all math is done, advance to the next day
@@ -1240,6 +1287,11 @@ contract Icosa is ERC20, ReentrancyGuard {
         // ETH handler
         if (tokenAddress == address(0)) {
 
+            // amount does not match sent eth, nuke transaction.
+            if (amount != msg.value) {
+                revert();
+            }
+
             // weth pools are backwards for some reason.
             tokenPrice = getPriceX96FromSqrtPriceX96(getSqrtTwapX96(_uniswapPools[_wethAddress]));
             stakePoints = (amount * (2**96)) / tokenPrice;
@@ -1248,14 +1300,13 @@ contract Icosa is ERC20, ReentrancyGuard {
         }
 
         // ERC20 handler
-        else {    
+        else {
             address uniswapPool = _uniswapPools[tokenAddress];
 
-            require(uniswapPool != address(0),
-                "ICSA: BAD TOKEN");
-
-            require(token.balanceOf(msg.sender) >= amount,
-                "ICSA: LOW BALANCE");
+            // invalid token, nuke the transaction.
+            if (tokenAddress != _usdcAddress && uniswapPool == address(0)) {
+                revert();
+            }
 
             if (tokenAddress != _usdcAddress) {
                 // weth pools are backwards for some reason.
@@ -1276,11 +1327,11 @@ contract Icosa is ERC20, ReentrancyGuard {
 
             token.transferFrom(msg.sender, _hdrnFlowAddress, amount);
         }
-        
-        uint256 nftId = _waatsa.mintStakeNft(msg.sender);
 
         require(stakePoints > 0,
             "ICSA: TOO SMALL");
+
+        uint256 nftId = _waatsa.mintStakeNft(msg.sender);
 
         // add stake entry
         _stakeAdd (

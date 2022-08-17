@@ -5,8 +5,8 @@ Icosa is a collection of Ethereum / PulseChain smart contracts that build upon t
 
 Icosa is deployed at the following Ethereum / PulseChain addresses.
 
-    Icosa.sol                  -> TBD
-    WeAreAllTheSA.sol          -> TBD
+    Icosa.sol                  -> 0xfc4913214444aF5c715cc9F7b52655e788A569ed
+    WeAreAllTheSA.sol          -> 0x2520E62474bA3085693f856B3E93fa6C92a4EF48
 
 
 The following smart contracts are **UNLICENSED, All rights are reserved**. 
